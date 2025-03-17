@@ -1,16 +1,3 @@
-// import React from 'react'
-
-// function MyFooter() {
-//   return (
-//     <div>
-//         <footer className="bg-light py-3 text-center">
-//         <p className="text-muted mb-0">&copy; 2025 Equipment Rental | All rights reserved.</p>
-//          </footer>
-//     </div>
-//   )
-// }
-
-// export default MyFooter
 
 import React from "react";
 import { Container, Row, Col } from "react-bootstrap";
