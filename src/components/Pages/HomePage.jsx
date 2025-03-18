@@ -169,43 +169,51 @@ export default function HomePage() {
 
       {/* Product Details Modal */}
       {/* Product Details Modal */}
-{selectedProduct && (
-  <Modal show={showModal} onHide={() => setShowModal(false)} centered>
-    <Modal.Header closeButton>
-      <Modal.Title>{selectedProduct.name}</Modal.Title>
-    </Modal.Header>
-    <Modal.Body>
-      <div className="text-center">
-        {/* Equipment Image (Smaller Size) */}
-        <img
-          src={imageUrls[selectedProduct.imageUrl] || "/defaultImage.png"}
-          alt="Equipment"
-          className="img-fluid rounded"
-          style={{ maxWidth: "250px", height: "auto" }}
-        />
-      </div>
-      <p className="mt-3"><strong>Description:</strong> {selectedProduct.description}</p>
-      <p><strong>Price Per Day:</strong> ₹{selectedProduct.pricePerDay}</p>
+      {selectedProduct && (
+        <Modal show={showModal} onHide={() => setShowModal(false)} centered>
+          <Modal.Header closeButton>
+            <Modal.Title>{selectedProduct.name}</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            {/* Flexbox Layout for Image and Details */}
+            <div className="d-flex align-items-center">
+              {/* Equipment Image (Left Side) */}
+              <div className="me-4">
+                <img
+                  src={imageUrls[selectedProduct.imageUrl] || "/defaultImage.png"}
+                  alt="Equipment"
+                  className="img-fluid rounded"
+                  style={{ maxWidth: "200px", height: "auto" }}
+                />
+              </div>
 
-      {/* Rental Form */}
-      <Form.Group>
-        <Form.Label>Start Date</Form.Label>
-        <Form.Control type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-      </Form.Group>
-      <Form.Group>
-        <Form.Label>End Date</Form.Label>
-        <Form.Control type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
-      </Form.Group>
+              {/* Equipment Details (Right Side) */}
+              <div>
+                <p><strong>Description:</strong> {selectedProduct.description}</p>
+                <p><strong>Price Per Day:</strong> ₹{selectedProduct.pricePerDay}</p>
 
-      <p><strong>Total Days:</strong> {totalDays}</p>
-      <p><strong>Total Cost:</strong> ₹{totalCost}</p>
-    </Modal.Body>
-    <Modal.Footer>
-      <Button variant="secondary" onClick={() => setShowModal(false)}>Close</Button>
-      <Button variant="primary" onClick={handleRentNow}>Rent Now</Button>
-    </Modal.Footer>
-  </Modal>
-)}
+                {/* Rental Form */}
+                <Form.Group>
+                  <Form.Label>Start Date</Form.Label>
+                  <Form.Control type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+                </Form.Group>
+                <Form.Group>
+                  <Form.Label>End Date</Form.Label>
+                  <Form.Control type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+                </Form.Group>
+
+                <p><strong>Total Days:</strong> {totalDays}</p>
+                <p><strong>Total Cost:</strong> ₹{totalCost}</p>
+              </div>
+            </div>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="secondary" onClick={() => setShowModal(false)}>Close</Button>
+            <Button variant="primary" onClick={handleRentNow}>Rent Now</Button>
+          </Modal.Footer>
+        </Modal>
+
+      )}
 
 
       {/* Footer */}
