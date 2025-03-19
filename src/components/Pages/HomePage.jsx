@@ -1,11 +1,10 @@
-
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { useCookies } from "react-cookie";
 import { jwtDecode } from "jwt-decode";
 import MyFooter from "../layout/MyFooter";
 import MyNavbar from "../layout/MyNavbar";
-import { Container, Row, Col, Card, Button, Modal, Form } from "react-bootstrap";
+import { Container, Row, Col, Card, Button, Modal, Form, Pagination } from "react-bootstrap";
 
 export default function HomePage() {
   const [cookie] = useCookies(["jwtToken"]);
@@ -20,18 +19,20 @@ export default function HomePage() {
   const [quantity, setQuantity] = useState(1);
   const [totalDays, setTotalDays] = useState(1);
   const [totalCost, setTotalCost] = useState(0);
+  const [addresses, setAddresses] = useState([]);
+  const [selectedAddress, setSelectedAddress] = useState("");
 
-  // Pagination state
+  // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 6; // Default 6 items per page
+  const itemsPerPage = 6;
 
   useEffect(() => {
     async function fetchEquipmentData() {
       try {
-        const response = await axios.get(
-          `http://localhost:8080/api/user/getAllEquipment`,
-          { headers: { Authorization: `Bearer ${cookie.jwtToken}` }, withCredentials: true }
-        );
+        const response = await axios.get(`http://localhost:8080/api/equipment/getAllEquipment`, {
+          headers: { Authorization: `Bearer ${cookie.jwtToken}` },
+          withCredentials: true,
+        });
         setEquipmentData(response.data);
         fetchImages(response.data);
       } catch (err) {
@@ -44,10 +45,11 @@ export default function HomePage() {
       await Promise.all(
         data.map(async (item) => {
           try {
-            const imageResponse = await axios.get(
-              `http://localhost:8080/api/user/${item.imageUrl}`,
-              { headers: { Authorization: `Bearer ${cookie.jwtToken}` }, responseType: "blob", withCredentials: true }
-            );
+            const imageResponse = await axios.get(`http://localhost:8080/api/equipment/${item.imageUrl}`, {
+              headers: { Authorization: `Bearer ${cookie.jwtToken}` },
+              responseType: "blob",
+              withCredentials: true,
+            });
             imageMap[item.imageUrl] = URL.createObjectURL(imageResponse.data);
           } catch {
             imageMap[item.imageUrl] = "/defaultImage.png";
@@ -60,12 +62,19 @@ export default function HomePage() {
     fetchEquipmentData();
   }, [cookie.jwtToken]);
 
-  // ** Pagination Logic **
-  const totalPages = Math.ceil(equipmentData.length / itemsPerPage);
-  const paginatedData = equipmentData.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
+  const fetchUserAddresses = async () => {
+    try {
+      const userId = jwtDecode(cookie.jwtToken).user_id;
+      const response = await axios.get(`http://localhost:8080/api/user/getAddressesByUser/${userId}`, {
+        headers: { Authorization: `Bearer ${cookie.jwtToken}` },
+        withCredentials: true,
+      });
+      setAddresses(response.data);
+      if (response.data.length > 0) setSelectedAddress(response.data[0].id);
+    } catch (error) {
+      console.error("Error fetching addresses:", error);
+    }
+  };
 
   const handleShowDetails = (item) => {
     setSelectedProduct(item);
@@ -75,45 +84,42 @@ export default function HomePage() {
     setTotalDays(1);
     setTotalCost(item.pricePerDay);
     setShowModal(true);
+    fetchUserAddresses();
   };
 
   useEffect(() => {
     if (startDate && endDate) {
       const start = new Date(startDate);
       const end = new Date(endDate);
-      const days = Math.max((end - start) / (1000 * 60 * 60 * 24), 1); // At least 1 day
+      const days = Math.max((end - start) / (1000 * 60 * 60 * 24), 1);
       setTotalDays(days);
       setTotalCost(days * (selectedProduct ? selectedProduct.pricePerDay : 0) * quantity);
     }
   }, [startDate, endDate, quantity, selectedProduct]);
 
-  // Handle Renting Equipment
   const handleRentNow = async () => {
-    if (!startDate || !endDate) {
-      alert("Please select start and end dates.");
+    if (!startDate || !endDate || !selectedAddress) {
+      alert("Please select start date, end date, and address.");
       return;
     }
 
     try {
-      const userId = jwtDecode(cookie.jwtToken).user_id; // Extract user ID from token
-
+      const userId = jwtDecode(cookie.jwtToken).user_id;
       const bookingData = {
         user: { id: userId },
         equipment: { equipmentId: selectedProduct.equipmentId },
+        address: { id: selectedAddress },
         startDate,
         endDate,
         totalPrice: totalCost,
-        status: "PENDING"
+        quantity,
+        status: "PENDING",
       };
 
-      await axios.post(
-        "http://localhost:8080/api/user/equipmentBooking",
-        bookingData,
-        {
-          headers: { Authorization: `Bearer ${cookie.jwtToken}` },
-          withCredentials: true
-        }
-      );
+      await axios.post("http://localhost:8080/api/booking/equipmentBooking", bookingData, {
+        headers: { Authorization: `Bearer ${cookie.jwtToken}` },
+        withCredentials: true,
+      });
 
       alert("Booking successful!");
       setShowModal(false);
@@ -123,76 +129,74 @@ export default function HomePage() {
     }
   };
 
+  // Pagination logic
+  const totalPages = Math.ceil(equipmentData.length / itemsPerPage);
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = equipmentData.slice(indexOfFirstItem, indexOfLastItem);
+
   return (
     <div className="min-vh-100 d-flex flex-column bg-light">
-      {/* Navbar */}
       <MyNavbar />
-
-      {/* Hero Section */}
       <section className="text-center py-5 bg-primary text-white">
         <h1 className="fw-bold">Rent Equipment with Ease</h1>
         <p className="lead">Find, rent, and manage equipment for any project in just a few clicks.</p>
       </section>
 
-      {/* Equipment Section */}
       <Container className="py-5">
         <h2 className="text-center fw-bold text-dark mb-4">Available Equipment</h2>
         <Row className="g-4 row-cols-1 row-cols-sm-2 row-cols-lg-3">
-          {paginatedData.map((item) => (
+          {currentItems.map((item) => (
             <Col key={item.equipmentId}>
-              <Card
-                className="shadow-sm border-0 h-100"
-                style={{ cursor: "pointer" }}
-                onClick={() => handleShowDetails(item)}
-              >
+              <Card className="shadow-sm border-0 h-100" onClick={() => handleShowDetails(item)}>
                 <Card.Img
                   variant="top"
-                  src={imageUrls[item.imageUrl] || "/loadingImage.png"}
+                  src={imageUrls[item.imageUrl] || "/defaultImage.png"}
                   alt="Equipment"
-                  className="object-fit-cover"
                   style={{ height: "200px", objectFit: "cover" }}
-                  onError={(e) => (e.target.src = "/defaultImage.png")}
                 />
-                <Card.Body className="d-flex flex-column">
-                  <Card.Title className="fw-bold text-dark">{item.name}</Card.Title>
-                  <Card.Text className="text-muted">
-                    <span className="fw-semibold">Price Per Day:</span> ₹{item.pricePerDay} <br />
-                    <span className="fw-semibold">Quantity:</span> {item.quantity}
-                  </Card.Text>
-                  <Button variant="primary" className="mt-auto">View Details</Button>
+                <Card.Body>
+                  <Card.Title>{item.name}</Card.Title>
+                  <Card.Text>₹{item.pricePerDay} / Day</Card.Text>
+                  <Button variant="primary">View Details</Button>
                 </Card.Body>
               </Card>
             </Col>
           ))}
         </Row>
+
+        {/* Pagination Controls */}
+        <Pagination className="justify-content-center mt-4">
+          <Pagination.Prev onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))} disabled={currentPage === 1} />
+          {[...Array(totalPages)].map((_, index) => (
+            <Pagination.Item key={index} active={index + 1 === currentPage} onClick={() => setCurrentPage(index + 1)}>
+              {index + 1}
+            </Pagination.Item>
+          ))}
+          <Pagination.Next onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages} />
+        </Pagination>
       </Container>
 
-      {/* Product Details Modal */}
-      {/* Product Details Modal */}
+      {/* Product Modal */}
       {selectedProduct && (
         <Modal show={showModal} onHide={() => setShowModal(false)} centered>
           <Modal.Header closeButton>
             <Modal.Title>{selectedProduct.name}</Modal.Title>
           </Modal.Header>
           <Modal.Body>
-            {/* Flexbox Layout for Image and Details */}
-            <div className="d-flex align-items-center">
-              {/* Equipment Image (Left Side) */}
-              <div className="me-4">
+            <Row>
+              {/* Left Side - Image */}
+              <Col md={5} className="d-flex align-items-center">
                 <img
                   src={imageUrls[selectedProduct.imageUrl] || "/defaultImage.png"}
                   alt="Equipment"
-                  className="img-fluid rounded"
-                  style={{ maxWidth: "200px", height: "auto" }}
+                  className="img-fluid"
+                  style={{ maxHeight: "250px", objectFit: "cover" }}
                 />
-              </div>
+              </Col>
 
-              {/* Equipment Details (Right Side) */}
-              <div>
-                <p><strong>Description:</strong> {selectedProduct.description}</p>
-                <p><strong>Price Per Day:</strong> ₹{selectedProduct.pricePerDay}</p>
-
-                {/* Rental Form */}
+              {/* Right Side - Booking Details */}
+              <Col md={7}>
                 <Form.Group>
                   <Form.Label>Start Date</Form.Label>
                   <Form.Control type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
@@ -201,22 +205,30 @@ export default function HomePage() {
                   <Form.Label>End Date</Form.Label>
                   <Form.Control type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
                 </Form.Group>
-
+                <Form.Group>
+                  <Form.Label>Quantity</Form.Label>
+                  <Form.Control type="number" min="1" value={quantity} onChange={(e) => setQuantity(e.target.value)} />
+                </Form.Group>
+                <Form.Group>
+                  <Form.Label>Select Address</Form.Label>
+                  <Form.Select value={selectedAddress} onChange={(e) => setSelectedAddress(e.target.value)}>
+                    {addresses.map((address) => (
+                      <option key={address.id} value={address.id}>{address.street}, {address.city}</option>
+                    ))}
+                  </Form.Select>
+                </Form.Group>
                 <p><strong>Total Days:</strong> {totalDays}</p>
                 <p><strong>Total Cost:</strong> ₹{totalCost}</p>
-              </div>
-            </div>
+              </Col>
+            </Row>
           </Modal.Body>
           <Modal.Footer>
             <Button variant="secondary" onClick={() => setShowModal(false)}>Close</Button>
             <Button variant="primary" onClick={handleRentNow}>Rent Now</Button>
           </Modal.Footer>
         </Modal>
-
       )}
 
-
-      {/* Footer */}
       <MyFooter />
     </div>
   );

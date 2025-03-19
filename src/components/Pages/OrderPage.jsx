@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { useCookies } from "react-cookie";
@@ -16,8 +14,9 @@ const OrderPage = () => {
   const [activeTab, setActiveTab] = useState("ALL");
   const [showModal, setShowModal] = useState(false);
   const [selectedBookingId, setSelectedBookingId] = useState(null);
+  const [equipmentData, setEquipmentData] = useState({});
   const [currentPage, setCurrentPage] = useState(1);
-  const ordersPerPage = 3; // Display 4 orders per page
+  const ordersPerPage = 3; // Display 3 orders per page
 
   useEffect(() => {
     fetchOrders();
@@ -36,13 +35,16 @@ const OrderPage = () => {
       const userId = decodedToken.user_id;
 
       const response = await axios.get(
-        `http://localhost:8080/api/user/getBookingDetails/${userId}`,
+        `http://localhost:8080/api/booking/bookingDetails/${userId}`,
         {
           headers: { Authorization: `Bearer ${token}` },
           withCredentials: true,
         }
       );
-      setOrders(response.data);
+
+      const bookings = response.data;
+      setOrders(bookings);
+      fetchEquipmentDetails(bookings);
     } catch (error) {
       console.error("Error fetching orders:", error);
       setError("Failed to fetch orders. Please try again.");
@@ -51,6 +53,41 @@ const OrderPage = () => {
     }
   };
 
+
+  const fetchEquipmentDetails = async (bookings) => {
+    try {
+      const token = cookies.jwtToken;
+  
+      // Fetch all equipment in one request
+      const response = await axios.get(`http://localhost:8080/api/equipment/getAllEquipment`, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true,
+      });
+  
+      if (!response.data || !Array.isArray(response.data)) {
+        console.error("Invalid equipment data:", response.data);
+        return;
+      }
+  
+      // Extract unique equipment IDs from bookings
+      const equipmentIds = new Set(bookings.map((b) => b.equipmentId));
+  
+      // Filter only the needed equipment
+      const equipmentMap = {};
+      response.data.forEach((equipment) => {
+        if (equipmentIds.has(equipment.equipmentId)) {
+          equipmentMap[equipment.equipmentId] = equipment;
+        }
+      });
+  
+      setEquipmentData(equipmentMap);
+      console.log(equipmentMap);
+  
+    } catch (error) {
+      console.error("Error fetching equipment details:", error);
+    }
+  };
+  
   const confirmCancelOrder = (bookingId) => {
     setSelectedBookingId(bookingId);
     setShowModal(true);
@@ -62,7 +99,7 @@ const OrderPage = () => {
     try {
       const token = cookies.jwtToken;
       await axios.put(
-        `http://localhost:8080/api/user/cancelBooking/${selectedBookingId}`,
+        `http://localhost:8080/api/booking/cancelBooking/${selectedBookingId}`,
         {},
         {
           headers: { Authorization: `Bearer ${token}` },
@@ -124,7 +161,7 @@ const OrderPage = () => {
               <Tab eventKey="ALL" title="All Orders">
                 {currentOrders.length > 0 ? (
                   currentOrders.map((order) => (
-                    <OrderCard key={order.bookingId} order={order} onConfirmCancel={confirmCancelOrder} />
+                    <OrderCard key={order.bookingId} order={order} equipmentData={equipmentData} onConfirmCancel={confirmCancelOrder} />
                   ))
                 ) : (
                   <p className="text-center">No orders found.</p>
@@ -135,7 +172,7 @@ const OrderPage = () => {
                 <Tab key={status} eventKey={status} title={status.charAt(0) + status.slice(1).toLowerCase()}>
                   {currentOrders.length > 0 ? (
                     currentOrders.map((order) => (
-                      <OrderCard key={order.bookingId} order={order} onConfirmCancel={confirmCancelOrder} />
+                      <OrderCard key={order.bookingId} order={order} equipmentData={equipmentData} onConfirmCancel={confirmCancelOrder} />
                     ))
                   ) : (
                     <p className="text-center">No {status.toLowerCase()} orders found.</p>
@@ -147,23 +184,13 @@ const OrderPage = () => {
             {/* Pagination Controls */}
             {filteredOrders.length > ordersPerPage && (
               <div className="d-flex justify-content-center mt-3">
-                <Button
-                  variant="primary"
-                  className="me-2"
-                  onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-                  disabled={currentPage === 1}
-                >
+                <Button variant="primary" className="me-2" onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))} disabled={currentPage === 1}>
                   Previous
                 </Button>
                 <span className="align-self-center">
                   Page {currentPage} of {totalPages}
                 </span>
-                <Button
-                  variant="primary"
-                  className="ms-2"
-                  onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
-                  disabled={currentPage === totalPages}
-                >
+                <Button variant="primary" className="ms-2" onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages}>
                   Next
                 </Button>
               </div>
@@ -177,9 +204,7 @@ const OrderPage = () => {
         <Modal.Header closeButton>
           <Modal.Title>Cancel Order</Modal.Title>
         </Modal.Header>
-        <Modal.Body>
-          Are you sure you want to cancel this order?
-        </Modal.Body>
+        <Modal.Body>Are you sure you want to cancel this order?</Modal.Body>
         <Modal.Footer>
           <Button variant="secondary" onClick={() => setShowModal(false)}>
             No
@@ -195,39 +220,21 @@ const OrderPage = () => {
   );
 };
 
-const OrderCard = ({ order, onConfirmCancel }) => {
+const OrderCard = ({ order, equipmentData, onConfirmCancel }) => {
   return (
     <Card className="mb-3 shadow-sm">
       <Card.Body>
         <Card.Title className="fw-bold text-primary">
-          {order.equipment.name}
+          {equipmentData[order.equipmentId]?.name || "Loading Equipment..."}
         </Card.Title>
         <Card.Text>
-          <strong>Start Date:</strong> {order.startDate}
-        </Card.Text>
-        <Card.Text>
-          <strong>End Date:</strong> {order.endDate}
+          <strong>Quantity:</strong> {order.quantity}
         </Card.Text>
         <Card.Text>
           <strong>Total Price:</strong> ₹{order.totalPrice}
         </Card.Text>
         <Card.Text>
-          <strong>Status:</strong>{" "}
-          <span
-            className={`badge px-3 py-2 ${
-              order.status === "APPROVED"
-                ? "bg-success"
-                : order.status === "PENDING"
-                ? "bg-warning"
-                : order.status === "REJECTED"
-                ? "bg-danger"
-                : order.status === "CANCELLED"
-                ? "bg-secondary"
-                : "bg-info"
-            }`}
-          >
-            {order.status}
-          </span>
+          <strong>Status:</strong> {order.status}
         </Card.Text>
 
         {order.status === "PENDING" && (
